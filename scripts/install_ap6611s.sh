@@ -18,8 +18,8 @@ fi
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 WORKDIR=${WORKDIR:-"${SCRIPT_DIR}/../ap6611s-build"}
-PATCH_SCRIPT=${PATCH_SCRIPT:-/home/pi/Share/ap6611s-support/script/generate_patch.sh}
-PATCH_FILE=${PATCH_FILE:-/home/pi/Share/ap6611s-support/patches/ap6611s-brcmfmac.patch}
+PATCH_SCRIPT=${PATCH_SCRIPT:-"${SCRIPT_DIR}/generate_patch.sh"}
+PATCH_FILE=${PATCH_FILE:-"${SCRIPT_DIR}/../patches/ap6611s-brcmfmac.patch"}
 DTB_TARGETS=${DTB_TARGETS:-"rk3588-orangepi-5-max.dtb rk3588-orangepi-5-plus.dtb rk3588-orangepi-5-ultra.dtb"}
 DTB_DEST_DIR=${DTB_DEST_DIR:-/boot/dtb/rockchip}
 KERNEL_SHORT=${KERNEL_SHORT:-6.18.3}
@@ -207,12 +207,12 @@ else
     warn "Host Module.symvers not found; modpost may fail"
 fi
 
-# 第四步：应用补丁（自动处理重复/反向，无交互）
-info "Applying AP6611S patch (auto-skip already applied)"
-if patch --forward -f -p1 --quiet < "$PATCH_FILE"; then
+# 第四步：应用补丁（自动处理重复，无交互）
+if patch --forward -f -p1 --quiet --dry-run < "$PATCH_FILE"; then
+    patch --forward -f -p1 --quiet < "$PATCH_FILE"
     info "Patch applied cleanly"
-elif patch --reverse -f -p1 --quiet < "$PATCH_FILE" 2>/dev/null; then
-    warn "Patch was already applied (reversed successfully), continuing"
+elif ! patch --forward -f -p1 --quiet --dry-run < "$PATCH_FILE" 2>/dev/null; then
+    warn "Patch was already applied, continuing"
 else
     warn "Patch application failed (may be partially applied), continuing with caution"
 fi
