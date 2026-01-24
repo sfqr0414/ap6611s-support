@@ -1,0 +1,179 @@
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
+index e2500e31c..26e811bf9 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
+@@ -8,6 +8,7 @@
+ #include <dt-bindings/interrupt-controller/irq.h>
+ #include <dt-bindings/phy/phy.h>
+ #include <dt-bindings/power/rk3588-power.h>
++#include <dt-bindings/soc/rockchip,boot-mode.h>
+ #include <dt-bindings/reset/rockchip,rk3588-cru.h>
+ #include <dt-bindings/phy/phy.h>
+ #include <dt-bindings/ata/ahci.h>
+@@ -767,6 +768,28 @@
+ 		#reset-cells = <1>;
+ 	};
+ 
++	pmu0_grf: syscon@fd588000 {
++    	compatible = "rockchip,rk3588-pmu0-grf", "syscon", "simple-mfd";
++    	reg = <0x0 0xfd588000 0x0 0x2000>;
++    
++    	reboot_mode: reboot-mode {
++    		compatible = "syscon-reboot-mode";
++    		offset = <0x80>;
++    		mode-bootloader = <BOOT_BL_DOWNLOAD>;
++    		mode-charge = <BOOT_CHARGING>;
++    		mode-fastboot = <BOOT_FASTBOOT>;
++    		mode-loader = <BOOT_BL_DOWNLOAD>;
++    		mode-normal = <BOOT_NORMAL>;
++    		mode-recovery = <BOOT_RECOVERY>;
++    		mode-ums = <BOOT_UMS>;
++    		mode-panic = <BOOT_PANIC>;
++    		mode-watchdog = <BOOT_WATCHDOG>;
++    		mode-quiescent = <BOOT_QUIESCENT>;
++    		/* add a mode to capture the ramdump through usb */
++    		mode-winusb = <BOOT_WINUSB>;
++    	};
++    };
++
+ 	i2c0: i2c@fd880000 {
+ 		compatible = "rockchip,rk3588-i2c", "rockchip,rk3399-i2c";
+ 		reg = <0x0 0xfd880000 0x0 0x1000>;
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
+index 9343dfc86..accdb62ab 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
+@@ -19,6 +19,25 @@
+ 		regulator-max-microvolt = <5000000>;
+ 		vin-supply = <&vcc5v0_sys>;
+ 	};
++
++	sdio_pwrseq: sdio-pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		clock-names = "ext_clock";
++		clocks = <&hym8563>;
++		post-power-on-delay-ms = <200>;
++		reset-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_LOW>;
++		status = "okay";
++	};
++
++	wireless_wlan: wireless-wlan {
++		compatible = "android,bcmdhd_wlan";
++		wifi_chip_type = "ap6611";
++		pinctrl-names = "default";
++		pinctrl-0 = <&wifi_host_wake_irq>;
++		gpio_wl_reg_on = <&gpio2 RK_PC5 GPIO_ACTIVE_HIGH>; 
++		gpio_wl_host_wake = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
++		status = "okay";
++	};
+ };
+ 
+ &headphone_amp {
+@@ -101,6 +120,16 @@
+ 			rockchip,pins = <4 RK_PC5 RK_FUNC_GPIO &pcfg_pull_none>;
+ 		};
+ 	};
++
++	wireless-wlan {
++		wifi_enable_h: wifi-enable-h {
++			rockchip,pins = <2 RK_PC5 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		wifi_host_wake_irq: wifi-host-wake-irq {
++			rockchip,pins = <0 RK_PB0 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++	};
+ };
+ 
+ &pwm4 {
+@@ -176,3 +205,38 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&usb_host_pwren>;
+ };
++
++&sdio {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	bus-width = <4>;
++	cap-sdio-irq;
++	disable-wp;
++	keep-power-in-suspend;
++	max-frequency = <100000000>;
++	mmc-pwrseq = <&sdio_pwrseq>;
++	non-removable;
++	no-mmc;
++	no-sd;
++	pinctrl-names = "default";
++	pinctrl-0 = <&sdiom0_pins>, <&wifi_enable_h>;
++	vmmc-supply = <&vcc_3v3_s3>;
++	vqmmc-supply = <&vcc_1v8_s3>;
++	status = "okay";
++};
++
++&sdiom0_pins {
++	rockchip,pins =
++		/* sdio_clk_m0 */
++		<2 RK_PB3 2 &pcfg_pull_none>,
++		/* sdio_cmd_m0 */
++		<2 RK_PB2 2 &pcfg_pull_up>,
++		/* sdio_d0_m0 */
++		<2 RK_PA6 2 &pcfg_pull_up>,
++		/* sdio_d1_m0 */
++		<2 RK_PA7 2 &pcfg_pull_up>,
++		/* sdio_d2_m0 */
++		<2 RK_PB0 2 &pcfg_pull_up>,
++		/* sdio_d3_m0 */
++		<2 RK_PB1 2 &pcfg_pull_up>;
++};
+\ No newline at end of file
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
+index 3bceee948..219ab33c4 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
+@@ -16,6 +16,7 @@
+ 	aliases {
+ 		mmc0 = &sdhci;
+ 		mmc1 = &sdmmc;
++		mmc2 = &sdio;
+ 	};
+ 
+ 	chosen {
+@@ -99,13 +100,6 @@
+ 		};
+ 	};
+ 
+-	rfkill {
+-		compatible = "rfkill-gpio";
+-		label = "rfkill-pcie-wlan";
+-		radio-type = "wlan";
+-		shutdown-gpios = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+-	};
+-
+ 	analog_sound: sound {
+ 		compatible = "simple-audio-card";
+ 		simple-audio-card,name = "Analog";
+diff --git a/include/dt-bindings/soc/rockchip,boot-mode.h b/include/dt-bindings/soc/rockchip,boot-mode.h
+index 4b0914c09..a0f63a040 100644
+--- a/include/dt-bindings/soc/rockchip,boot-mode.h
++++ b/include/dt-bindings/soc/rockchip,boot-mode.h
+@@ -10,7 +10,19 @@
+ #define BOOT_BL_DOWNLOAD	(REBOOT_FLAG + 1)
+ /* enter recovery */
+ #define BOOT_RECOVERY		(REBOOT_FLAG + 3)
+- /* enter fastboot mode */
++/* reboot by panic */
++#define BOOT_PANIC		(REBOOT_FLAG + 7)
++/* reboot by watchdog */
++#define BOOT_WATCHDOG		(REBOOT_FLAG + 8)
++/* enter fastboot mode */
+ #define BOOT_FASTBOOT		(REBOOT_FLAG + 9)
++/* enter charging mode */
++#define BOOT_CHARGING		(REBOOT_FLAG + 11)
++/* enter usb mass storage mode */
++#define BOOT_UMS		(REBOOT_FLAG + 12)
++/* reboot system quiescent */
++#define BOOT_QUIESCENT		(REBOOT_FLAG + 14)
++/* reboot by panic and capture ramdump in uboot through usb */
++#define BOOT_WINUSB		(REBOOT_FLAG + 15)
+ 
+ #endif
