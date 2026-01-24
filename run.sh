@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Remove previous extracted kernel source for a clean build
-sudo rm -rf ap6611s-build/linux-6.18.3/
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+ROOT_DIR="${SCRIPT_DIR}"
 
-# Run the installer under sudo with explicit environment variables
-sudo WORKDIR="$(pwd)/ap6611s-build" \
+sudo rm -rf "${ROOT_DIR}/ap6611s-build/linux-6.18.3/"
+
+sudo WORKDIR="${ROOT_DIR}/ap6611s-build" \
 DTB_ONLY=true \
-PATCH_SCRIPT="$(pwd)/scripts/generate_patch.sh" \
-PATCH_FILE="$(pwd)/patches/ap6611s-brcmfmac.patch" \
+PATCH_SCRIPT="${ROOT_DIR}/scripts/generate_patch.sh" \
+PATCH_FILE="${ROOT_DIR}/patches/ap6611s-brcmfmac.patch" \
 SUDO_USER="$(whoami)" \
-bash ./scripts/install_ap6611s.sh
+bash "${ROOT_DIR}/scripts/install_ap6611s.sh"
