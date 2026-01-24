@@ -40,7 +40,7 @@ index e2500e31c..26e811bf9 100644
  		compatible = "rockchip,rk3588-i2c", "rockchip,rk3399-i2c";
  		reg = <0x0 0xfd880000 0x0 0x1000>;
 diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
-index 9343dfc86..0c0e0a971 100644
+index 9343dfc86..5eaee3682 100644
 --- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
 +++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
 @@ -19,6 +19,28 @@
@@ -53,7 +53,7 @@ index 9343dfc86..0c0e0a971 100644
 +		clock-names = "ext_clock";
 +		clocks = <&hym8563>;
 +		post-power-on-delay-ms = <200>;
-+		/*reset-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_LOW>;*/
++		reset-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_LOW>;
 +		status = "okay";
 +	};
 +
