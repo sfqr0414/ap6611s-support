@@ -20,7 +20,7 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 WORKDIR=${WORKDIR:-"${SCRIPT_DIR}/../ap6611s-build"}
 PATCH_SCRIPT=${PATCH_SCRIPT:-"${SCRIPT_DIR}/generate_patch.sh"}
 PATCH_FILE=${PATCH_FILE:-"${SCRIPT_DIR}/../patches/ap6611s-brcmfmac.patch"}
-DTB_TARGETS=${DTB_TARGETS:-"rk3588-orangepi-5-max.dtb rk3588-orangepi-5-plus.dtb rk3588-orangepi-5-ultra.dtb"}
+DTB_TARGETS=${DTB_TARGETS:-"rk3588-orangepi-5-max.dtb rk3588-orangepi-5-ultra.dtb"}
 DTB_DEST_DIR=${DTB_DEST_DIR:-/boot/dtb/rockchip}
 KERNEL_SHORT=${KERNEL_SHORT:-6.18.3}
 TARBALL_URL=${TARBALL_URL:-https://mirrors.aliyun.com/linux-kernel/v6.x/linux-${KERNEL_SHORT}.tar.xz}
@@ -28,6 +28,48 @@ TARBALL=${WORKDIR}/linux-${KERNEL_SHORT}.tar.xz
 SRC_DIR=${WORKDIR}/linux-${KERNEL_SHORT}
 MOD_SRC=drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
 MOD_DST=/lib/modules/$(uname -r)/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+
+# 支持只处理 DTB 的模式，可以通过环境变量 DTB_ONLY=1 或命令行参数 --dtb-only 触发
+# 兼容短参数 -d, 支持 --help 显示用法
+DTB_ONLY=${DTB_ONLY:-false}
+# 规范化环境变量(接受1/true/yes 不区分大小写)
+case "${DTB_ONLY,,}" in
+  1|true|yes) DTB_ONLY=true;;
+  *) DTB_ONLY=false;;
+esac
+
+print_usage() {
+    cat <<'USAGE'
+Usage: install_ap6611s.sh [options]
+Options:
+  --dtb-only, -d    Only build and install DTBs (skip module build/install and other steps)
+  -h, --help        Show this help message
+Environment:
+  DTB_ONLY=1|true   Same as --dtb-only
+USAGE
+}
+
+# 解析命令行参数（覆盖环境变量）
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dtb-only|-d)
+            DTB_ONLY=true
+            shift
+            ;;
+        -h|--help)
+            print_usage
+            exit 0
+            ;;
+        *)
+            error "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "${DTB_ONLY}" == "true" ]]; then
+    info "⚠️ DTB-only mode enabled: only DTBs will be built and installed; skipping other steps."
+fi
 
 # 提取系统内核定制后缀 
 CURRENT_KERNEL_FULL=$(uname -r)
@@ -217,42 +259,42 @@ else
     warn "Patch application failed (may be partially applied), continuing with caution"
 fi
 
-# 第五步：编译模块（核心！强制指定 KERNELRELEASE 环境变量，兜底注入版本）
-info "Building brcmfmac module (force KERNELRELEASE=${FULL_KERNEL_VERSION})"
-if [[ -d "$SRC_DIR" && -f "$SRC_DIR/.config" ]]; then
-    # 强制传递 KERNELRELEASE 环境变量，让 modpost 生成正确的 vermagic
-    KERNELRELEASE="${FULL_KERNEL_VERSION}" make -C "$SRC_DIR" M="$SRC_DIR/drivers/net/wireless/broadcom/brcm80211/brcmfmac" modules -j"$(nproc)"
-elif [[ -d "/lib/modules/$(uname -r)/build" ]]; then
-    warn "Local kernel source invalid; falling back to system build tree"
-    KERNELRELEASE="${FULL_KERNEL_VERSION}" make -C "/lib/modules/$(uname -r)/build" M="$SRC_DIR/drivers/net/wireless/broadcom/brcm80211/brcmfmac" modules -j"$(nproc)"
-else
-    error "No valid kernel build tree found"
-    exit 1
-fi
+if [[ "${DTB_ONLY}" != "true" ]]; then
+    # 第五步：编译模块（核心！强制指定 KERNELRELEASE 环境变量，兜底注入版本）
+    info "Building brcmfmac module (force KERNELRELEASE=${FULL_KERNEL_VERSION})"
+    if [[ -d "$SRC_DIR" && -f "$SRC_DIR/.config" ]]; then
+        # 强制传递 KERNELRELEASE 环境变量，让 modpost 生成正确的 vermagic
+        KERNELRELEASE="${FULL_KERNEL_VERSION}" make -C "$SRC_DIR" M="$SRC_DIR/drivers/net/wireless/broadcom/brcm80211/brcmfmac" modules -j"$(nproc)"
+    elif [[ -d "/lib/modules/$(uname -r)/build" ]]; then
+        warn "Local kernel source invalid; falling back to system build tree"
+        KERNELRELEASE="${FULL_KERNEL_VERSION}" make -C "/lib/modules/$(uname -r)/build" M="$SRC_DIR/drivers/net/wireless/broadcom/brcm80211/brcmfmac" modules -j"$(nproc)"
+    else
+        error "No valid kernel build tree found"
+        exit 1
+    fi
+    # 第六步：验证模块 vermagic（严谨匹配，允许微小空格差异）
+    info "Verifying module version magic (check custom suffix)"
+    MODULE_VERMAGIC=$(modinfo "$SRC_DIR/$MOD_SRC" 2>/dev/null | grep -oP 'vermagic: \K.*' || true)
+    MODULE_VERMAGIC_TRIMMED=$(echo "${MODULE_VERMAGIC}" | xargs)
+    # 双重验证：既匹配后缀，也匹配完整版本
+    if [[ -z "${MODULE_VERMAGIC_TRIMMED}" ]]; then
+        warn "Failed to extract module vermagic, proceed with caution"
+    elif [[ "${MODULE_VERMAGIC_TRIMMED}" == *"${EXTRAVERSION_AUTOMATIC}"* && "${MODULE_VERMAGIC_TRIMMED}" == *"${KERNEL_SHORT}"* ]]; then
+        info "✅ Module vermagic is valid: ${MODULE_VERMAGIC_TRIMMED}"
+    else
+        error "❌ Module vermagic missing suffix! Expected: *${EXTRAVERSION_AUTOMATIC}*, Got: ${MODULE_VERMAGIC_TRIMMED}"
+        # 额外输出版本文件内容，方便排查
+        info "=== Debug Info: Current version files ==="
+        cat "${SRC_DIR}/include/generated/utsrelease.h" 2>/dev/null || warn "utsrelease.h not found"
+        cat "${SRC_DIR}/include/config/kernel.release" 2>/dev/null || warn "kernel.release not found"
+        exit 1
+    fi
 
-# 第六步：验证模块 vermagic（严谨匹配，允许微小空格差异）
-info "Verifying module version magic (check custom suffix)"
-MODULE_VERMAGIC=$(modinfo "$SRC_DIR/$MOD_SRC" 2>/dev/null | grep -oP 'vermagic: \K.*' || true)
-MODULE_VERMAGIC_TRIMMED=$(echo "${MODULE_VERMAGIC}" | xargs)
-
-# 双重验证：既匹配后缀，也匹配完整版本
-if [[ -z "${MODULE_VERMAGIC_TRIMMED}" ]]; then
-    warn "Failed to extract module vermagic, proceed with caution"
-elif [[ "${MODULE_VERMAGIC_TRIMMED}" == *"${EXTRAVERSION_AUTOMATIC}"* && "${MODULE_VERMAGIC_TRIMMED}" == *"${KERNEL_SHORT}"* ]]; then
-    info "✅ Module vermagic is valid: ${MODULE_VERMAGIC_TRIMMED}"
-else
-    error "❌ Module vermagic missing suffix! Expected: *${EXTRAVERSION_AUTOMATIC}*, Got: ${MODULE_VERMAGIC_TRIMMED}"
-    # 额外输出版本文件内容，方便排查
-    info "=== Debug Info: Current version files ==="
-    cat "${SRC_DIR}/include/generated/utsrelease.h" 2>/dev/null || warn "utsrelease.h not found"
-    cat "${SRC_DIR}/include/config/kernel.release" 2>/dev/null || warn "kernel.release not found"
-    exit 1
-fi
-
-# 后续步骤：编译 DTB、安装模块（与之前一致）
-if [[ ! -f "$SRC_DIR/$MOD_SRC" ]]; then
-    error "Module build failed: $MOD_SRC not found"
-    exit 1
+    # 后续步骤：编译 DTB、安装模块（与之前一致）
+    if [[ ! -f "$SRC_DIR/$MOD_SRC" ]]; then
+        error "Module build failed: $MOD_SRC not found"
+        exit 1
+    fi
 fi
 
 info "Building device trees (only requested targets: $DTB_TARGETS)"
@@ -287,23 +329,25 @@ for dtb in $DTB_TARGETS; do
     info "Replaced $dtb at $DTB_DEST"
 done
 
-info "Installing new module"
-[[ -f "$MOD_DST" && ! -f "$MOD_DST.ap6611s.bak" ]] && cp "$MOD_DST" "$MOD_DST.ap6611s.bak"
-install -m 0644 "$SRC_DIR/$MOD_SRC" "$MOD_DST"
-depmod -a >/dev/null
+if [[ "${DTB_ONLY}" != "true" ]]; then
+    info "Installing new module"
+    [[ -f "$MOD_DST" && ! -f "$MOD_DST.ap6611s.bak" ]] && cp "$MOD_DST" "$MOD_DST.ap6611s.bak"
+    install -m 0644 "$SRC_DIR/$MOD_SRC" "$MOD_DST"
+    depmod -a >/dev/null
 
-if modprobe -r brcmfmac; then
-    info "Old module unloaded"
-else
-    warn "brcmfmac was not loaded before install"
-fi
+    if modprobe -r brcmfmac; then
+        info "Old module unloaded"
+    else
+        warn "brcmfmac was not loaded before install"
+    fi
 
-if modprobe brcmfmac; then
-    info "✅ brcmfmac module loaded successfully! Check dmesg for details."
-else
-    error "❌ Failed to load brcmfmac module! Check dmesg for errors."
-    dmesg | grep -i brcmfmac | tail -5
-    exit 1
+    if modprobe brcmfmac; then
+        info "✅ brcmfmac module loaded successfully! Check dmesg for details."
+    else
+        error "❌ Failed to load brcmfmac module! Check dmesg for errors."
+        dmesg | grep -i brcmfmac | tail -5
+        exit 1
+    fi
 fi
 
 info "✅ All tasks completed successfully!"
