@@ -4,7 +4,7 @@ LINUX_VERSION="${LINUX_VERSION:-6.18.3}"
 TAR_FILE_NAME="linux-${LINUX_VERSION}.tar.xz"
 TAR_FILE_PATH="../ap6611s-build/${TAR_FILE_NAME}"
 
-DIR="$HOME/Share/ap6611s-support/worktree"
+DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 WORK_DIR="clean-linux-${LINUX_VERSION}"
 TARGET_DIR="${DIR}/${WORK_DIR}"
 PATCH_FILE_NAME="${PATCH_FILE_NAME:-ap6611s-brcmfmac.patch}"
