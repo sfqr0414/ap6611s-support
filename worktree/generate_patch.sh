@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+#!/usr/bin/env bash
 LINUX_VERSION="${LINUX_VERSION:-6.18.3}"
 TAR_FILE_NAME="linux-${LINUX_VERSION}.tar.xz"
 TAR_FILE_PATH="../ap6611s-build/${TAR_FILE_NAME}"
