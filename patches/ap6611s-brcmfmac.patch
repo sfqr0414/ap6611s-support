@@ -40,42 +40,27 @@ index e2500e31c..26e811bf9 100644
  		compatible = "rockchip,rk3588-i2c", "rockchip,rk3399-i2c";
  		reg = <0x0 0xfd880000 0x0 0x1000>;
 diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
-index 9343dfc86..56ca2352a 100644
+index 9343dfc86..d871f9112 100644
 --- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
 +++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
-@@ -19,6 +19,31 @@
+@@ -19,6 +19,16 @@
  		regulator-max-microvolt = <5000000>;
  		vin-supply = <&vcc5v0_sys>;
  	};
-+
-+	vcc_wifi_en: vcc-wifi-en {
-+        compatible = "regulator-fixed";
-+        regulator-name = "vcc_wifi_en";
-+        /* 这里的 GPIO 对应你的 WL_REG_ON */
-+        gpio = <&gpio2 RK_PC5 GPIO_ACTIVE_HIGH>;
-+        enable-active-high;
-+		/* 增加电压声明，解决 MMC 核心的困惑 */
-+		regulator-min-microvolt = <3300000>;
-+		regulator-max-microvolt = <3300000>;
-+        /* 核心点：仿照 vcc_3v3_s3，让它启动即开启 */
-+        regulator-always-on;
-+        regulator-boot-on;
-+        status = "okay";
-+    };
 +
 +	sdio_pwrseq: sdio-pwrseq {
 +		compatible = "mmc-pwrseq-simple";
 +		clock-names = "ext_clock";
 +		clocks = <&hym8563>;
 +		post-power-on-delay-ms = <200>;
-+		/* reset-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_LOW>; */
++		reset-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_LOW>;
 +		status = "okay";
 +	};
 +
  };
  
  &headphone_amp {
-@@ -101,6 +126,16 @@
+@@ -101,6 +111,16 @@
  			rockchip,pins = <4 RK_PC5 RK_FUNC_GPIO &pcfg_pull_none>;
  		};
  	};
@@ -92,46 +77,28 @@ index 9343dfc86..56ca2352a 100644
  };
  
  &pwm4 {
-@@ -176,3 +211,71 @@
+@@ -176,3 +196,53 @@
  	pinctrl-names = "default";
  	pinctrl-0 = <&usb_host_pwren>;
  };
-+
-+/*&sdio {
-+	#address-cells = <1>;
-+	#size-cells = <0>;
-+	bus-width = <4>;
-+	cap-sdio-irq;
-+	disable-wp;
-+	keep-power-in-suspend;
-+	max-frequency = <100000000>;
-+	mmc-pwrseq = <&sdio_pwrseq>;
-+	non-removable;
-+	no-mmc;
-+	no-sd;
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&sdiom0_pins>, <&wifi_enable_h>;
-+	vmmc-supply = <&vcc_3v3_s3>;
-+	vqmmc-supply = <&vcc_1v8_s3>;
-+	status = "okay";
-+};*/
 +
 +&sdio {
 +	#address-cells = <1>;
 +	#size-cells = <0>;
 +	bus-width = <4>;
-+	cap-sdio-irq;
-+	disable-wp;
-+	keep-power-in-suspend;
-+	max-frequency = <100000000>;
++	cap-sdio-irq;                   
++    cap-sd-highspeed;
++	keep-power-in-suspend;    
++    disable-wp; 
++	sd-uhs-sdr104;
++    pwrseq-1.8v;
++	max-frequency = <150000000>;
 +	mmc-pwrseq = <&sdio_pwrseq>;
 +	non-removable;
 +	no-mmc;
 +	no-sd;
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&sdiom0_pins>;
-+	vmmc-supply = <&vcc_wifi_en>;
-+	vqmmc-supply = <&vcc_1v8_s3>;
 +	status = "okay";
 +
 +	wireless_wlan: wifi@1 {
@@ -143,7 +110,7 @@ index 9343dfc86..56ca2352a 100644
 +		/*wl_reg_on-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_HIGH>;*/ 
 +        wl_host_wake-gpios = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
 +        interrupt-parent = <&gpio0>;
-+        interrupts = <RK_PB0 IRQ_TYPE_LEVEL_HIGH>; 
++        interrupts = <RK_PB0 IRQ_TYPE_LEVEL_HIGH>;
 +        interrupt-names = "host-wake";
 +        status = "okay";
 +    };
