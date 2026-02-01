@@ -1,5 +1,5 @@
 diff --git a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
-index e2500e31c..9d65b9970 100644
+index e2500e31c..26e811bf9 100644
 --- a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
 +++ b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
 @@ -8,6 +8,7 @@
@@ -10,14 +10,10 @@ index e2500e31c..9d65b9970 100644
  #include <dt-bindings/reset/rockchip,rk3588-cru.h>
  #include <dt-bindings/phy/phy.h>
  #include <dt-bindings/ata/ahci.h>
-@@ -574,10 +575,40 @@
- 		status = "disabled";
+@@ -767,6 +768,28 @@
+ 		#reset-cells = <1>;
  	};
  
--	pmu1grf: syscon@fd58a000 {
--		compatible = "rockchip,rk3588-pmugrf", "syscon", "simple-mfd";
--		reg = <0x0 0xfd58a000 0x0 0x10000>;
--	};
 +	pmu0_grf: syscon@fd588000 {
 +    	compatible = "rockchip,rk3588-pmu0-grf", "syscon", "simple-mfd";
 +    	reg = <0x0 0xfd588000 0x0 0x2000>;
@@ -40,30 +36,9 @@ index e2500e31c..9d65b9970 100644
 +    	};
 +    };
 +
-+	pmu1_grf: syscon@fd58a000 {
-+        compatible = "rockchip,rk3588-pmu1-grf", "syscon", "simple-mfd";
-+        reg = <0x0 0xfd58a000 0x0 0x2000>;
-+    
-+        reboot {
-+            compatible = "syscon-reboot";
-+            offset = <0x0c>;
-+            mask = <0xffff0001>;
-+            value = <0x00010001>;
-+            priority = <255>;
-+        };
-+    };
- 
- 	sys_grf: syscon@fd58c000 {
- 		compatible = "rockchip,rk3588-sys-grf", "syscon";
-@@ -1920,7 +1951,7 @@
- 			     <GIC_SPI 38 IRQ_TYPE_LEVEL_HIGH 0>,
- 			     <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH 0>,
- 			     <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH 0>;
--		rockchip,pmu = <&pmu1grf>;
-+		rockchip,pmu = <&pmu1_grf>;
- 	};
- 
- 	pcie2x1l1: pcie@fe180000 {
+ 	i2c0: i2c@fd880000 {
+ 		compatible = "rockchip,rk3588-i2c", "rockchip,rk3399-i2c";
+ 		reg = <0x0 0xfd880000 0x0 0x1000>;
 diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
 index 9343dfc86..09f0e85a2 100644
 --- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
