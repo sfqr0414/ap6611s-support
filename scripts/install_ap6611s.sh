@@ -72,31 +72,35 @@ if [[ "${DTB_ONLY}" == "true" ]]; then
 fi
 
 # 提取系统内核定制后缀 
-CURRENT_KERNEL_FULL=$(uname -r)
-info "Current running kernel full version: ${CURRENT_KERNEL_FULL}"
+if [[ "${DTB_ONLY}" != "true" ]]; then
+   
+   CURRENT_KERNEL_FULL=$(uname -r)
+   info "Current running kernel full version: ${CURRENT_KERNEL_FULL}"
+   
+   if [[ "${CURRENT_KERNEL_FULL}" == "${KERNEL_SHORT}"* ]]; then
+       EXTRAVERSION_AUTOMATIC="${CURRENT_KERNEL_FULL#${KERNEL_SHORT}}"
+   else
+       error "Current kernel full version (${CURRENT_KERNEL_FULL}) does not match local kernel short version (${KERNEL_SHORT})"
+       exit 1
+   fi
+   
+   if [[ -z "${EXTRAVERSION_AUTOMATIC}" ]]; then
+       warn "No custom suffix found for current kernel, using empty extraversion"
+   else
+       info "Automatically extracted kernel custom suffix: ${EXTRAVERSION_AUTOMATIC}"
+   fi
+   
+   # 拆分 KERNEL_SHORT 为 VERSION/PATCHLEVEL/SUBLEVEL（避免未绑定变量）
+   KERNEL_VERSION=${KERNEL_SHORT%%.*}
+   KERNEL_REMAIN=${KERNEL_SHORT#*.}
+   KERNEL_PATCHLEVEL=${KERNEL_REMAIN%%.*}
+   KERNEL_SUBLEVEL=${KERNEL_REMAIN#*.}
+   
+   # 完整内核版本（拼接主版本+后缀）
+   FULL_KERNEL_VERSION="${KERNEL_SHORT}${EXTRAVERSION_AUTOMATIC}"
+   info "Full kernel version to generate: ${FULL_KERNEL_VERSION}"
 
-if [[ "${CURRENT_KERNEL_FULL}" == "${KERNEL_SHORT}"* ]]; then
-    EXTRAVERSION_AUTOMATIC="${CURRENT_KERNEL_FULL#${KERNEL_SHORT}}"
-else
-    error "Current kernel full version (${CURRENT_KERNEL_FULL}) does not match local kernel short version (${KERNEL_SHORT})"
-    exit 1
 fi
-
-if [[ -z "${EXTRAVERSION_AUTOMATIC}" ]]; then
-    warn "No custom suffix found for current kernel, using empty extraversion"
-else
-    info "Automatically extracted kernel custom suffix: ${EXTRAVERSION_AUTOMATIC}"
-fi
-
-# 拆分 KERNEL_SHORT 为 VERSION/PATCHLEVEL/SUBLEVEL（避免未绑定变量）
-KERNEL_VERSION=${KERNEL_SHORT%%.*}
-KERNEL_REMAIN=${KERNEL_SHORT#*.}
-KERNEL_PATCHLEVEL=${KERNEL_REMAIN%%.*}
-KERNEL_SUBLEVEL=${KERNEL_REMAIN#*.}
-
-# 完整内核版本（拼接主版本+后缀）
-FULL_KERNEL_VERSION="${KERNEL_SHORT}${EXTRAVERSION_AUTOMATIC}"
-info "Full kernel version to generate: ${FULL_KERNEL_VERSION}"
 
 # 手动生成版本文件（独立函数，可多次调用，防止被覆盖）
 function force_generate_version_files() {
@@ -229,24 +233,26 @@ else
     warn "make olddefconfig failed; continuing with existing config"
 fi
 
-# 执行 modules_prepare 准备模块编译环境
-if make modules_prepare >/dev/null 2>&1; then
-    info "make modules_prepare succeeded"
-else
-    warn "make modules_prepare failed; module builds may still work against host build tree"
-fi
-
-# 第二步：强制生成版本文件（关键！在配置之后，防止被覆盖，且设置只读）
-info "Forcing generation of version files (with suffix, read-only protection)"
-force_generate_version_files
-
-# 第三步：复制 Module.symvers（避免版本不匹配）
-HOST_SYMVERS="/lib/modules/$(uname -r)/build/Module.symvers"
-if [[ -f "$HOST_SYMVERS" ]]; then
-    info "Copying host Module.symvers"
-    cp "$HOST_SYMVERS" "$SRC_DIR/Module.symvers"
-else
-    warn "Host Module.symvers not found; modpost may fail"
+if [[ "${DTB_ONLY}" != "true" ]]; then
+    # 执行 modules_prepare 准备模块编译环境
+    if make modules_prepare >/dev/null 2>&1; then
+        info "make modules_prepare succeeded"
+    else
+        warn "make modules_prepare failed; module builds may still work against host build tree"
+    fi
+    
+    # 第二步：强制生成版本文件（关键！在配置之后，防止被覆盖，且设置只读）
+    info "Forcing generation of version files (with suffix, read-only protection)"
+    force_generate_version_files
+    
+    # 第三步：复制 Module.symvers（避免版本不匹配）
+    HOST_SYMVERS="/lib/modules/$(uname -r)/build/Module.symvers"
+    if [[ -f "$HOST_SYMVERS" ]]; then
+        info "Copying host Module.symvers"
+        cp "$HOST_SYMVERS" "$SRC_DIR/Module.symvers"
+    else
+        warn "Host Module.symvers not found; modpost may fail"
+    fi
 fi
 
 # 第四步：应用补丁（自动处理重复，无交互）
