@@ -33,6 +33,10 @@ else
 fi
 
 if [ ! -d ".git" ]; then
+    git config --global user.email "you@example.com"
+    git config --global user.name "Your Name"
+    git config --global init.defaultBranch main
+    git branch -m main
     git init
     git add .
     git commit -m "initial" > /dev/null
