@@ -160,10 +160,10 @@ index 9343dfc86..09f0e85a2 100644
 +};
 \ No newline at end of file
 diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts
-index 8b1d35760..1328fbc2f 100644
+index 8b1d35760..e119cfcbf 100644
 --- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts
 +++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts
-@@ -123,3 +123,83 @@
+@@ -123,3 +123,112 @@
  		remote-endpoint = <&hdmi1_in_vp1>;
  	};
  };
@@ -247,9 +247,38 @@ index 8b1d35760..1328fbc2f 100644
 +        pinctrl-0 = <&pmic_pins>;
 +    };
 +};
++
++&sfc {
++	spi_flash: flash@0 {
++		vcc-supply = <&vcc_3v3_s3>;
++	};
++};
++
++ &pd_gpu {
++	/delete-property/ domain-supply;
++ };
++ 
++ &pd_npu {
++	/delete-property/ domain-supply;
++ };
++ 
++ &rknn_core_0 {
++	/delete-property/ npu-supply;
++	/delete-property/ sram-supply;
++ };
++ 
++ &rknn_core_1 {
++	/delete-property/ npu-supply;
++	/delete-property/ sram-supply;
++ };
++ 
++ &rknn_core_2 {
++	/delete-property/ npu-supply;
++	/delete-property/ sram-supply;
++ };
 \ No newline at end of file
 diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
-index 3bceee948..5e142e02d 100644
+index 3bceee948..2fde9ba8a 100644
 --- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
 +++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
 @@ -16,6 +16,7 @@
@@ -274,20 +303,350 @@ index 3bceee948..5e142e02d 100644
  	analog_sound: sound {
  		compatible = "simple-audio-card";
  		simple-audio-card,name = "Analog";
-@@ -371,11 +365,11 @@
+@@ -481,10 +475,10 @@
+ 		vcc8-supply = <&vcc5v0_sys>;
+ 		vcc9-supply = <&vcc5v0_sys>;
+ 		vcc10-supply = <&vcc5v0_sys>;
+-		vcc11-supply = <&vcc_2v0_pldo_s3>;
++		vcc11-supply = <&vcc5v0_sys>;
+ 		vcc12-supply = <&vcc5v0_sys>;
+-		vcc13-supply = <&vdd2_ddr_s3>;
+-		vcc14-supply = <&vdd2_ddr_s3>;
++		vcc13-supply = <&vcc5v0_sys>;
++		vcc14-supply = <&vcc5v0_sys>;
+ 		vcca-supply = <&vcc5v0_sys>;
+ 
+ 		gpio-controller;
+diff --git a/include/dt-bindings/soc/rockchip,boot-mode.h b/include/dt-bindings/soc/rockchip,boot-mode.h
+index 4b0914c09..a0f63a040 100644
+--- a/include/dt-bindings/soc/rockchip,boot-mode.h
++++ b/include/dt-bindings/soc/rockchip,boot-mode.h
+@@ -10,7 +10,19 @@
+ #define BOOT_BL_DOWNLOAD	(REBOOT_FLAG + 1)
+ /* enter recovery */
+ #define BOOT_RECOVERY		(REBOOT_FLAG + 3)
+- /* enter fastboot mode */
++/* reboot by panic */
++#define BOOT_PANIC		(REBOOT_FLAG + 7)
++/* reboot by watchdog */
++#define BOOT_WATCHDOG		(REBOOT_FLAG + 8)
++/* enter fastboot mode */
+ #define BOOT_FASTBOOT		(REBOOT_FLAG + 9)
++/* enter charging mode */
++#define BOOT_CHARGING		(REBOOT_FLAG + 11)
++/* enter usb mass storage mode */
++#define BOOT_UMS		(REBOOT_FLAG + 12)
++/* reboot system quiescent */
++#define BOOT_QUIESCENT		(REBOOT_FLAG + 14)
++/* reboot by panic and capture ramdump in uboot through usb */
++#define BOOT_WINUSB		(REBOOT_FLAG + 15)
+ 
+ #endif
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
+index e2500e31c..4a1dbbe05 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3588-base.dtsi
+@@ -8,6 +8,7 @@
+ #include <dt-bindings/interrupt-controller/irq.h>
+ #include <dt-bindings/phy/phy.h>
+ #include <dt-bindings/power/rk3588-power.h>
++#include <dt-bindings/soc/rockchip,boot-mode.h>
+ #include <dt-bindings/reset/rockchip,rk3588-cru.h>
+ #include <dt-bindings/phy/phy.h>
+ #include <dt-bindings/ata/ahci.h>
+@@ -767,6 +768,28 @@
+ 		#reset-cells = <1>;
+ 	};
+ 
++	pmu0_grf: syscon@fd588000 {
++    	compatible = "rockchip,rk3588-pmu0-grf", "syscon", "simple-mfd";
++    	reg = <0x0 0xfd588000 0x0 0x2000>;
++    
++    	reboot_mode: reboot-mode {
++    		compatible = "syscon-reboot-mode";
++    		offset = <0x80>;
++    		mode-bootloader = <BOOT_BL_DOWNLOAD>;
++    		mode-charge = <BOOT_CHARGING>;
++    		mode-fastboot = <BOOT_FASTBOOT>;
++    		mode-loader = <BOOT_BL_DOWNLOAD>;
++    		mode-normal = <BOOT_NORMAL>;
++    		mode-recovery = <BOOT_RECOVERY>;
++    		mode-ums = <BOOT_UMS>;
++    		mode-panic = <BOOT_PANIC>;
++    		mode-watchdog = <BOOT_WATCHDOG>;
++    		mode-quiescent = <BOOT_QUIESCENT>;
++    		/* add a mode to capture the ramdump through usb */
++    		mode-winusb = <BOOT_WINUSB>;
++    	};
++    };
++
+ 	i2c0: i2c@fd880000 {
+ 		compatible = "rockchip,rk3588-i2c", "rockchip,rk3399-i2c";
+ 		reg = <0x0 0xfd880000 0x0 0x1000>;
+@@ -1366,6 +1389,18 @@
+ 		resets = <&cru SRST_A_AV1>, <&cru SRST_P_AV1>, <&cru SRST_A_AV1_BIU>, <&cru SRST_P_AV1_BIU>;
+ 	};
+ 
++	av1d_mmu: iommu@fdca0000 {
++		compatible = "rockchip,iommu-av1d";
++		reg = <0x0 0xfdca0000 0x0 0x600>;
++		interrupts = <GIC_SPI 109 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "irq_av1d_mmu";
++		clocks = <&cru ACLK_AV1>, <&cru PCLK_AV1>;
++		clock-names = "aclk", "iface";
++		#iommu-cells = <0>;
++		power-domains = <&power RK3588_PD_AV1>;
++		status = "disabled";
++	};
++
+ 	vop: vop@fdd90000 {
+ 		compatible = "rockchip,rk3588-vop";
+ 		reg = <0x0 0xfdd90000 0x0 0x4200>, <0x0 0xfdd95000 0x0 0x1000>;
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
+index 9343dfc86..09f0e85a2 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-compact.dtsi
+@@ -19,6 +19,38 @@
+ 		regulator-max-microvolt = <5000000>;
+ 		vin-supply = <&vcc5v0_sys>;
+ 	};
++
++	sdio_pwrseq: sdio-pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		clocks = <&hym8563>;
++		clock-names = "ext_clock";
++	    pinctrl-names = "default";
++	    pinctrl-0 = <&wifi_enable_h>;
++	    /*
++	    * On the module itself this is one of these (depending
++	    * on the actual card populated):
++	    * - SDIO_RESET_L_WL_REG_ON
++	    * - PDN (power down when low)
++	    */
++	    post-power-on-delay-ms = <200>;
++		reset-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_LOW>;
++		status = "okay";
++	};
++
++	wireless_wlan: wireless-wlan {
++        compatible = "android,bcmdhd_wlan";
++		reg = <1>;
++        wifi_chip_type = "ap6611";
++        pinctrl-names = "default";
++        pinctrl-0 = <&wifi_host_wake_irq>;
++		wl_reg_on-gpios = <&gpio2 RK_PC5 GPIO_ACTIVE_HIGH>;
++        wl_host_wake-gpios = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
++        interrupt-parent = <&gpio0>;
++        interrupts = <RK_PB0 IRQ_TYPE_LEVEL_HIGH>;
++        interrupt-names = "host-wake";
++        status = "okay";
++    };
++
  };
  
- &pd_gpu {
--	domain-supply = <&vdd_gpu_s0>;
-+	/* domain-supply removed to avoid PMU <-> PMIC deferred probe cycle */
+ &headphone_amp {
+@@ -101,6 +133,16 @@
+ 			rockchip,pins = <4 RK_PC5 RK_FUNC_GPIO &pcfg_pull_none>;
+ 		};
+ 	};
++
++	wireless-wlan {
++		wifi_enable_h: wifi-enable-h {
++			rockchip,pins = <2 RK_PC5 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++
++		wifi_host_wake_irq: wifi-host-wake-irq {
++			rockchip,pins = <0 RK_PB0 RK_FUNC_GPIO &pcfg_pull_down>;
++		};
++	};
  };
  
- &pd_npu {
--	domain-supply = <&vdd_npu_s0>;
-+	/* domain-supply removed to avoid PMU <-> PMIC deferred probe cycle */
+ &pwm4 {
+@@ -176,3 +218,39 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&usb_host_pwren>;
  };
++
++&sdio {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	bus-width = <4>;
++	cap-sdio-irq;                   
++    cap-sd-highspeed;
++	keep-power-in-suspend;    
++    disable-wp; 
++	sd-uhs-sdr104;
++    pwrseq-1.8v;
++	max-frequency = <150000000>;
++	mmc-pwrseq = <&sdio_pwrseq>;
++	non-removable;
++	no-mmc;
++	no-sd;
++	pinctrl-names = "default";
++	pinctrl-0 = <&sdiom0_pins>;
++	status = "okay";
++};
++
++&sdiom0_pins {
++	rockchip,pins =
++		/* sdio_clk_m0 */
++		<2 RK_PB3 2 &pcfg_pull_none>,
++		/* sdio_cmd_m0 */
++		<2 RK_PB2 2 &pcfg_pull_up>,
++		/* sdio_d0_m0 */
++		<2 RK_PA6 2 &pcfg_pull_up>,
++		/* sdio_d1_m0 */
++		<2 RK_PA7 2 &pcfg_pull_up>,
++		/* sdio_d2_m0 */
++		<2 RK_PB0 2 &pcfg_pull_up>,
++		/* sdio_d3_m0 */
++		<2 RK_PB1 2 &pcfg_pull_up>;
++};
+\ No newline at end of file
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts
+index 8b1d35760..e119cfcbf 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts
++++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5-max.dts
+@@ -123,3 +123,112 @@
+ 		remote-endpoint = <&hdmi1_in_vp1>;
+ 	};
+ };
++
++&vpu121 {
++	vpu-supply = <&vdd_vdenc_s0>;
++	status = "okay";
++};
++
++&vpu121_mmu {
++	status = "okay";
++};
++
++&av1d {
++	vpu-supply = <&vdd_vdenc_s0>;
++	status = "okay";
++};
++
++&av1d_mmu {
++	status = "okay";
++};
++
++&vepu121_0 {
++	vpu-supply = <&vdd_vdenc_s0>;
++	status = "okay";
++};
++
++&vepu121_0_mmu {
++	status = "okay";
++};
++
++&vepu121_1 {
++	vpu-supply = <&vdd_vdenc_s0>;
++	status = "okay";
++};
++
++&vepu121_1_mmu {
++	status = "okay";
++};
++
++&vepu121_2 {
++	vpu-supply = <&vdd_vdenc_s0>;
++	status = "okay";
++};
++
++&vepu121_2_mmu {
++	status = "okay";
++};
++
++&vepu121_3 {
++	vpu-supply = <&vdd_vdenc_s0>;
++	status = "okay";
++};
++
++&vepu121_3_mmu {
++	status = "okay";
++};
++
++&pmu {
++	pmu_io_domains: pmu-io-domains {
++		compatible = "rockchip,rk3588-pmu-io-domains";
++		pmuio1-supply = <&vcc_1v8_s0>;
++		pmuio2-supply = <&vcc_1v8_s0>;
++		vccio1-supply = <&avcc_1v8_s0>;
++		vccio2-supply = <&vcc_1v8_s0>;
++		vccio3-supply = <&vcc_3v3_s0>;
++		vccio4-supply = <&vcc_1v8_s0>;
++		vccio5-supply = <&vcc_3v3_s0>;
++		vccio6-supply = <&vcc_1v8_s0>;
++		vccio7-supply = <&vcc_3v3_s0>;
++		status = "okay";
++	};
++};
++
++&i2c1 {
++	pinctrl-0 = <&i2c1m4_xfer>; 
++};
++
++&spi2 {
++    pmic@0 {
++        pinctrl-0 = <&pmic_pins>;
++    };
++};
++
++&sfc {
++	spi_flash: flash@0 {
++		vcc-supply = <&vcc_3v3_s3>;
++	};
++};
++
++ &pd_gpu {
++	/delete-property/ domain-supply;
++ };
++ 
++ &pd_npu {
++	/delete-property/ domain-supply;
++ };
++ 
++ &rknn_core_0 {
++	/delete-property/ npu-supply;
++	/delete-property/ sram-supply;
++ };
++ 
++ &rknn_core_1 {
++	/delete-property/ npu-supply;
++	/delete-property/ sram-supply;
++ };
++ 
++ &rknn_core_2 {
++	/delete-property/ npu-supply;
++	/delete-property/ sram-supply;
++ };
+\ No newline at end of file
+diff --git a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
+index 3bceee948..2fde9ba8a 100644
+--- a/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
++++ b/arch/arm64/boot/dts/rockchip/rk3588-orangepi-5.dtsi
+@@ -16,6 +16,7 @@
+ 	aliases {
+ 		mmc0 = &sdhci;
+ 		mmc1 = &sdmmc;
++		mmc2 = &sdio;
+ 	};
  
- &rknn_core_0 {
+ 	chosen {
+@@ -99,13 +100,6 @@
+ 		};
+ 	};
+ 
+-	rfkill {
+-		compatible = "rfkill-gpio";
+-		label = "rfkill-pcie-wlan";
+-		radio-type = "wlan";
+-		shutdown-gpios = <&gpio0 RK_PC4 GPIO_ACTIVE_HIGH>;
+-	};
+-
+ 	analog_sound: sound {
+ 		compatible = "simple-audio-card";
+ 		simple-audio-card,name = "Analog";
 @@ -481,10 +475,10 @@
  		vcc8-supply = <&vcc5v0_sys>;
  		vcc9-supply = <&vcc5v0_sys>;
